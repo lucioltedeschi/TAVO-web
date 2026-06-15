@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <!-- PLACEHOLDER: reemplazar este archivo por el logo real (logo.svg o logo.png en client/public) -->
+  <rect width="120" height="120" rx="16" fill="#b30000"/>
+  <text x="60" y="74" font-family="Arial Black, Arial" font-size="40" font-weight="900" fill="#fff" text-anchor="middle">TAVO</text>
+</svg>
