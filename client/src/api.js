@@ -1,4 +1,8 @@
 // Helper centralizado para llamar a la API
+// En dev: Vite proxy redirige /api → localhost:4000
+// En prod (Vercel): VITE_API_URL apunta al backend en Render
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
+
 const TOKEN_KEY = 'tavo_token';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -10,7 +14,7 @@ export async function api(path, { method = 'GET', body } = {}) {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined

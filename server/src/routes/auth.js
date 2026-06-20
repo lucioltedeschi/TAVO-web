@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
-const pool = require('../db');
+const db = require('../db');
 const { sign, requireAuth } = require('../middleware/auth');
 
 const PERFIL_FIELDS = 'id, nombre, email, telefono, direccion, ciudad, provincia, codigo_postal, rol';
@@ -15,16 +15,16 @@ router.post('/register', async (req, res, next) => {
     if (password.length < 6) {
       return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
     }
-    const [exists] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+    const [exists] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
     if (exists.length) return res.status(409).json({ error: 'Ese email ya está registrado' });
 
     const hash = await bcrypt.hash(password, 10);
-    const [r] = await pool.query(
+    const [ins] = await db.query(
       `INSERT INTO users (nombre, email, password_hash, telefono, direccion, ciudad, provincia, codigo_postal)
-       VALUES (?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?) RETURNING id`,
       [nombre, email, hash, telefono || null, direccion || null, ciudad || null, provincia || null, codigo_postal || null]
     );
-    const [rows] = await pool.query(`SELECT ${PERFIL_FIELDS} FROM users WHERE id = ?`, [r.insertId]);
+    const [rows] = await db.query(`SELECT ${PERFIL_FIELDS} FROM users WHERE id = ?`, [ins[0].id]);
     res.status(201).json({ token: sign(rows[0]), user: rows[0] });
   } catch (e) { next(e); }
 });
@@ -33,11 +33,11 @@ router.post('/register', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email || '']);
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email || '']);
     if (!rows.length || !(await bcrypt.compare(password || '', rows[0].password_hash))) {
       return res.status(401).json({ error: 'Email o contraseña incorrectos' });
     }
-    const user = rows[0];
+    const user = { ...rows[0] };
     delete user.password_hash;
     res.json({ token: sign(user), user });
   } catch (e) { next(e); }
@@ -46,7 +46,7 @@ router.post('/login', async (req, res, next) => {
 // GET /api/auth/me
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
-    const [rows] = await pool.query(`SELECT ${PERFIL_FIELDS} FROM users WHERE id = ?`, [req.user.id]);
+    const [rows] = await db.query(`SELECT ${PERFIL_FIELDS} FROM users WHERE id = ?`, [req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(rows[0]);
   } catch (e) { next(e); }
@@ -56,12 +56,12 @@ router.get('/me', requireAuth, async (req, res, next) => {
 router.put('/me', requireAuth, async (req, res, next) => {
   try {
     const { nombre, telefono, direccion, ciudad, provincia, codigo_postal } = req.body;
-    await pool.query(
+    await db.query(
       `UPDATE users SET nombre = COALESCE(?, nombre), telefono = ?, direccion = ?, ciudad = ?, provincia = ?, codigo_postal = ?
        WHERE id = ?`,
       [nombre, telefono || null, direccion || null, ciudad || null, provincia || null, codigo_postal || null, req.user.id]
     );
-    const [rows] = await pool.query(`SELECT ${PERFIL_FIELDS} FROM users WHERE id = ?`, [req.user.id]);
+    const [rows] = await db.query(`SELECT ${PERFIL_FIELDS} FROM users WHERE id = ?`, [req.user.id]);
     res.json(rows[0]);
   } catch (e) { next(e); }
 });

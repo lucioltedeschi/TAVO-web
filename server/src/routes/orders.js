@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const crypto = require('crypto');
-const pool = require('../db');
+const db = require('../db');
 const { optionalAuth, requireAuth } = require('../middleware/auth');
 const { crearPreferencia } = require('../mp');
 const { comprobanteHTML } = require('../services/comprobante');
@@ -10,11 +10,10 @@ function nuevoCodigo() {
 }
 
 // POST /api/orders  → crea pedido + preferencia de Mercado Pago
-// body: { items: [{ product_id, cantidad }], cliente: { nombre, email, telefono, direccion, ciudad, provincia, codigo_postal, notas } }
 router.post('/', optionalAuth, async (req, res, next) => {
   let conn;
   try {
-    conn = await pool.getConnection();
+    conn = await db.getConnection();
     const { items, cliente } = req.body;
     if (!Array.isArray(items) || !items.length) {
       return res.status(400).json({ error: 'El carrito está vacío' });
@@ -58,22 +57,24 @@ router.post('/', optionalAuth, async (req, res, next) => {
     const total = +detalle.reduce((s, d) => s + d.subtotal, 0).toFixed(2);
 
     const codigo = nuevoCodigo();
-    const [r] = await conn.query(
+    const [ins] = await conn.query(
       `INSERT INTO orders (codigo, user_id, nombre, email, telefono, direccion, ciudad, provincia, codigo_postal, notas, total)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
       [codigo, req.user?.id || null, c.nombre, c.email, c.telefono || null,
        c.direccion, c.ciudad, c.provincia, c.codigo_postal || null, c.notas || null, total]
     );
+    const orderId = ins[0].id;
+
     for (const d of detalle) {
       await conn.query(
         'INSERT INTO order_items (order_id, product_id, nombre, precio_unit, cantidad, subtotal) VALUES (?,?,?,?,?,?)',
-        [r.insertId, d.product_id, d.nombre, d.precio_unit, d.cantidad, d.subtotal]
+        [orderId, d.product_id, d.nombre, d.precio_unit, d.cantidad, d.subtotal]
       );
     }
 
     // Preferencia de Mercado Pago (Checkout Pro)
     const pref = await crearPreferencia({ codigo, nombre: c.nombre, email: c.email }, detalle);
-    await conn.query('UPDATE orders SET mp_preference_id = ? WHERE id = ?', [pref.id, r.insertId]);
+    await conn.query('UPDATE orders SET mp_preference_id = ? WHERE id = ?', [pref.id, orderId]);
 
     await conn.commit();
     res.status(201).json({ codigo, total, init_point: pref.init_point });
@@ -88,7 +89,7 @@ router.post('/', optionalAuth, async (req, res, next) => {
 // GET /api/orders/mios  → pedidos del usuario logueado
 router.get('/mios', requireAuth, async (req, res, next) => {
   try {
-    const [orders] = await pool.query(
+    const [orders] = await db.query(
       'SELECT id, codigo, total, estado, created_at FROM orders WHERE user_id = ? ORDER BY created_at DESC',
       [req.user.id]
     );
@@ -97,17 +98,16 @@ router.get('/mios', requireAuth, async (req, res, next) => {
 });
 
 // GET /api/orders/seguimiento?codigo=TAVO-XXXX&email=...
-// Público: requiere código + email para evitar exponer datos de terceros
 router.get('/seguimiento', async (req, res, next) => {
   try {
     const { codigo, email } = req.query;
     if (!codigo || !email) return res.status(400).json({ error: 'Indicá código de pedido y email' });
-    const [orders] = await pool.query(
+    const [orders] = await db.query(
       'SELECT * FROM orders WHERE codigo = ? AND email = ?', [codigo.trim(), email.trim()]
     );
     if (!orders.length) return res.status(404).json({ error: 'No se encontró un pedido con esos datos' });
     const order = orders[0];
-    const [items] = await pool.query(
+    const [items] = await db.query(
       'SELECT nombre, precio_unit, cantidad, subtotal FROM order_items WHERE order_id = ?', [order.id]
     );
     res.json({
@@ -119,11 +119,11 @@ router.get('/seguimiento', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// GET /api/orders/:codigo/comprobante?email=...  → comprobante imprimible (HTML)
+// GET /api/orders/:codigo/comprobante?email=...
 router.get('/:codigo/comprobante', async (req, res, next) => {
   try {
     const { email } = req.query;
-    const [orders] = await pool.query(
+    const [orders] = await db.query(
       'SELECT * FROM orders WHERE codigo = ? AND email = ?', [req.params.codigo, email || '']
     );
     if (!orders.length) return res.status(404).send('Comprobante no encontrado. Verificá código y email.');
@@ -131,7 +131,7 @@ router.get('/:codigo/comprobante', async (req, res, next) => {
     if (order.estado === 'pendiente_pago' || order.estado === 'cancelado') {
       return res.status(400).send('El pedido aún no tiene un pago aprobado.');
     }
-    const [items] = await pool.query(
+    const [items] = await db.query(
       'SELECT nombre, precio_unit, cantidad, subtotal FROM order_items WHERE order_id = ?', [order.id]
     );
     res.send(comprobanteHTML(order, items));

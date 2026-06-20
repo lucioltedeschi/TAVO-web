@@ -1,4 +1,4 @@
-const pool = require('../db');
+const db = require('../db');
 const { obtenerPago } = require('../mp');
 
 /**
@@ -11,8 +11,9 @@ async function procesarPago(paymentId) {
   const codigo = pago.external_reference;
   if (!codigo) return { ok: false, motivo: 'Pago sin referencia de pedido' };
 
-  const conn = await pool.getConnection();
+  let conn;
   try {
+    conn = await db.getConnection();
     await conn.beginTransaction();
 
     const [orders] = await conn.query(
@@ -55,10 +56,10 @@ async function procesarPago(paymentId) {
     await conn.commit();
     return { ok: true, codigo };
   } catch (e) {
-    await conn.rollback();
+    if (conn) await conn.rollback().catch(() => {});
     throw e;
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
 }
 
