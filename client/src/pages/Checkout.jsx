@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { fmt } from '../api';
+import { fmt, callEdge } from '../api';
 
 const VACIO = { nombre: '', email: '', telefono: '', direccion: '', ciudad: '', provincia: '', codigo_postal: '', notas: '' };
 
@@ -47,14 +47,12 @@ export default function Checkout() {
     setError('');
     setEnviando(true);
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('crear-orden', {
-        body: {
-          items: items.map(i => ({ product_id: i.id, cantidad: i.cantidad })),
-          cliente: form,
-        },
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      const data = await callEdge('crear-orden', {
+        items: items.map(i => ({ product_id: i.id, cantidad: i.cantidad })),
+        cliente: form,
+      }, session);
 
-      if (fnError) throw new Error(fnError.message);
       if (!data?.init_point) throw new Error('No se pudo generar el pago');
 
       // Guardamos el pedido para la vuelta del checkout

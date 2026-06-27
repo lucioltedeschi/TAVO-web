@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { fmt, ESTADOS_LABEL } from '../api';
+import { fmt, ESTADOS_LABEL, callEdge } from '../api';
 
 const ESTADOS = ['pendiente_pago', 'pagado', 'en_preparacion', 'en_camino', 'entregado', 'cancelado'];
 const PROD_VACIO = { nombre: '', descripcion: '', categoria: '', precio: '', unidad: 'caja', stock: '', imagen: '' };
 
 // Helper: llama a la Edge Function admin con el JWT del admin
 async function adminFn(body) {
-  const { data, error } = await supabase.functions.invoke('admin', { body });
-  if (error) throw new Error(error.message);
-  if (data?.error) throw new Error(data.error);
-  return data;
+  const { data: { session } } = await supabase.auth.getSession();
+  return callEdge('admin', body, session);
 }
 
 export default function Admin() {

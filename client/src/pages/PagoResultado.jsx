@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { comprobanteUrl } from '../api';
+import { comprobanteUrl, callEdge } from '../api';
 import { useCart } from '../context/CartContext';
 
 // Página a la que vuelve el usuario desde Mercado Pago:
@@ -23,10 +23,8 @@ export default function PagoResultado() {
       clear(); // el carrito ya se compró
       // Confirmar el pago contra MP (fallback al webhook)
       if (paymentId && paymentId !== 'null') {
-        supabase.functions.invoke('confirmar-pago', { body: { payment_id: paymentId } })
-          .then(({ data, error }) => {
-            if (!error && data?.ok) setConfirmado(true);
-          })
+        callEdge('confirmar-pago', { payment_id: paymentId })
+          .then(data => { if (data?.ok) setConfirmado(true); })
           .catch(() => {})
           .finally(() => setVerificando(false));
       } else {
