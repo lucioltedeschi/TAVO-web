@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { api, fmt, ESTADOS_LABEL } from '../api';
+import { supabase } from '../lib/supabase';
+import { fmt, ESTADOS_LABEL } from '../api';
 
 export default function Perfil() {
-  const { user, setUser, loading } = useAuth();
+  const { user, updateProfile, loading } = useAuth();
   const [form, setForm] = useState(null);
   const [pedidos, setPedidos] = useState([]);
   const [msg, setMsg] = useState('');
@@ -16,7 +17,13 @@ export default function Perfil() {
         direccion: user.direccion || '', ciudad: user.ciudad || '',
         provincia: user.provincia || '', codigo_postal: user.codigo_postal || ''
       });
-      api('/orders/mios').then(setPedidos).catch(() => {});
+      // Cargar pedidos del usuario autenticado directamente desde Supabase
+      supabase
+        .from('orders')
+        .select('id, codigo, total, estado, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .then(({ data }) => setPedidos(data ?? []));
     }
   }, [user]);
 
@@ -30,8 +37,7 @@ export default function Perfil() {
     e.preventDefault();
     setMsg('');
     try {
-      const actualizado = await api('/auth/me', { method: 'PUT', body: form });
-      setUser(actualizado);
+      await updateProfile(form);
       setMsg('Datos guardados ✓');
     } catch (err) {
       setMsg(err.message);

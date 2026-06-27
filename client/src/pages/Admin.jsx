@@ -1,8 +1,21 @@
 import { useEffect, useState } from 'react';
-import { api, fmt, ESTADOS_LABEL } from '../api';
+import { supabase } from '../lib/supabase';
+import { fmt, ESTADOS_LABEL } from '../api';
 
 const ESTADOS = ['pendiente_pago', 'pagado', 'en_preparacion', 'en_camino', 'entregado', 'cancelado'];
 const PROD_VACIO = { nombre: '', descripcion: '', categoria: '', precio: '', unidad: 'caja', stock: '', imagen: '' };
+
+// Helper: llama a la Edge Function admin con el JWT del admin
+async function adminFn(body) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const { data, error } = await supabase.functions.invoke('admin', {
+    body,
+    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
 
 export default function Admin() {
   const [tab, setTab] = useState('dashboard');
@@ -26,7 +39,9 @@ function Dashboard() {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
 
-  useEffect(() => { api('/admin/stats').then(setStats).catch(e => setError(e.message)); }, []);
+  useEffect(() => {
+    adminFn({ action: 'getStats' }).then(setStats).catch(e => setError(e.message));
+  }, []);
 
   if (error) return <p className="alert error">{error}</p>;
   if (!stats) return <p>Cargando…</p>;
@@ -75,12 +90,14 @@ function Pedidos() {
   const [abierto, setAbierto] = useState(null);
   const [error, setError] = useState('');
 
-  const cargar = f => api(`/admin/orders${f ? `?estado=${f}` : ''}`).then(setPedidos).catch(e => setError(e.message));
+  const cargar = f => adminFn({ action: 'getOrders', ...(f ? { estado: f } : {}) })
+    .then(setPedidos).catch(e => setError(e.message));
+
   useEffect(() => { cargar(filtro); }, [filtro]);
 
   const cambiarEstado = async (id, estado) => {
     try {
-      await api(`/admin/orders/${id}/estado`, { method: 'PUT', body: { estado } });
+      await adminFn({ action: 'updateOrderEstado', id, estado });
       cargar(filtro);
     } catch (e) { alert(e.message); }
   };
@@ -149,10 +166,10 @@ function PedidoFila({ p, abierto, onToggle, onEstado }) {
 function Productos() {
   const [productos, setProductos] = useState([]);
   const [form, setForm] = useState(PROD_VACIO);
-  const [editando, setEditando] = useState(null); // id en edición
+  const [editando, setEditando] = useState(null);
   const [error, setError] = useState('');
 
-  const cargar = () => api('/admin/products').then(setProductos).catch(e => setError(e.message));
+  const cargar = () => adminFn({ action: 'getProducts' }).then(setProductos).catch(e => setError(e.message));
   useEffect(() => { cargar(); }, []);
 
   const onChange = e => setForm({ ...form, [e.target.name]: e.target.value });
@@ -162,8 +179,8 @@ function Productos() {
     setError('');
     try {
       const body = { ...form, precio: Number(form.precio), stock: Number(form.stock || 0) };
-      if (editando) await api(`/admin/products/${editando}`, { method: 'PUT', body });
-      else await api('/admin/products', { method: 'POST', body });
+      if (editando) await adminFn({ action: 'updateProduct', id: editando, ...body });
+      else await adminFn({ action: 'createProduct', ...body });
       setForm(PROD_VACIO);
       setEditando(null);
       cargar();
@@ -181,7 +198,7 @@ function Productos() {
 
   const desactivar = async p => {
     if (!confirm(`¿${p.activo ? 'Desactivar' : 'Reactivar'} "${p.nombre}"?`)) return;
-    await api(`/admin/products/${p.id}`, { method: 'PUT', body: { activo: p.activo ? 0 : 1 } });
+    await adminFn({ action: 'updateProduct', id: p.id, activo: p.activo ? 0 : 1 });
     cargar();
   };
 

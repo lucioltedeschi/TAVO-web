@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { api } from '../api';
+import { supabase } from '../lib/supabase';
+import { comprobanteUrl } from '../api';
 import { useCart } from '../context/CartContext';
 
 // Página a la que vuelve el usuario desde Mercado Pago:
@@ -20,10 +21,14 @@ export default function PagoResultado() {
   useEffect(() => {
     if (resultado === 'exito') {
       clear(); // el carrito ya se compró
-      // Confirmar el pago contra MP (fallback al webhook, clave en localhost)
+      // Confirmar el pago contra MP (fallback al webhook)
       if (paymentId && paymentId !== 'null') {
-        api('/payments/confirmar', { method: 'POST', body: { payment_id: paymentId } })
-          .then(r => setConfirmado(r.ok))
+        supabase.functions.invoke('confirmar-pago', {
+          body: { payment_id: paymentId },
+        })
+          .then(({ data, error }) => {
+            if (!error && data?.ok) setConfirmado(true);
+          })
           .catch(() => {})
           .finally(() => setVerificando(false));
       } else {
@@ -50,7 +55,7 @@ export default function PagoResultado() {
         <div className="acciones-center">
           {codigo && email && (
             <a className="btn btn-outline" target="_blank" rel="noreferrer"
-               href={`/api/orders/${codigo}/comprobante?email=${encodeURIComponent(email)}`}>
+               href={comprobanteUrl(codigo, email)}>
               Ver comprobante de pago
             </a>
           )}

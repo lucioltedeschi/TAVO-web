@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, fmt, emojiDe } from '../api';
+import { fmt, emojiDe } from '../api';
+import { supabase } from '../lib/supabase';
 import { useCart } from '../context/CartContext';
 
 export default function Home() {
@@ -9,7 +10,15 @@ export default function Home() {
   const nav = useNavigate();
 
   useEffect(() => {
-    api('/products').then(p => setDestacados(p.slice(0, 6))).catch(() => {});
+    supabase
+      .from('products')
+      .select('*')
+      .eq('activo', 1)
+      .order('nombre')
+      .limit(6)
+      .then(({ data }) => {
+        setDestacados((data ?? []).map(p => ({ ...p, disponible: Number(p.stock) > 0 })));
+      });
   }, []);
 
   return (
@@ -38,7 +47,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Productos destacados → lleva directo al catálogo */}
+      {/* Productos destacados */}
       <section className="container">
         <div className="section-head">
           <h2>Nuestros productos</h2>

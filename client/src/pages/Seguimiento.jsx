@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { api, fmt, ESTADOS_LABEL } from '../api';
+import { fmt, ESTADOS_LABEL, comprobanteUrl } from '../api';
+import { supabase } from '../lib/supabase';
 
 const PASOS = ['pagado', 'en_preparacion', 'en_camino', 'entregado'];
 
@@ -14,10 +15,15 @@ export default function Seguimiento() {
     setError('');
     setPedido(null);
     try {
-      const p = await api(`/orders/seguimiento?codigo=${encodeURIComponent(codigo.trim())}&email=${encodeURIComponent(email.trim())}`);
-      setPedido(p);
+      const { data, error: rpcError } = await supabase.rpc('buscar_pedido', {
+        p_codigo: codigo.trim().toUpperCase(),
+        p_email: email.trim().toLowerCase(),
+      });
+      if (rpcError) throw new Error(rpcError.message);
+      if (!data) throw new Error('Pedido no encontrado');
+      setPedido(data);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Pedido no encontrado');
     }
   };
 
@@ -63,7 +69,7 @@ export default function Seguimiento() {
           <h3>Detalle</h3>
           <table className="tabla">
             <tbody>
-              {pedido.items.map((i, idx) => (
+              {(pedido.items ?? []).map((i, idx) => (
                 <tr key={idx}>
                   <td>{i.nombre} × {Number(i.cantidad)}</td>
                   <td className="num">{fmt(i.subtotal)}</td>
@@ -76,7 +82,7 @@ export default function Seguimiento() {
 
           {pedido.estado !== 'pendiente_pago' && pedido.estado !== 'cancelado' && (
             <a className="btn btn-outline" target="_blank" rel="noreferrer"
-               href={`/api/orders/${pedido.codigo}/comprobante?email=${encodeURIComponent(email.trim())}`}>
+               href={comprobanteUrl(pedido.codigo, email.trim())}>
               Ver comprobante de pago
             </a>
           )}

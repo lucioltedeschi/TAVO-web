@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { api, fmt } from '../api';
+import { supabase } from '../lib/supabase';
+import { fmt } from '../api';
 
 const VACIO = { nombre: '', email: '', telefono: '', direccion: '', ciudad: '', provincia: '', codigo_postal: '', notas: '' };
 
@@ -46,17 +47,26 @@ export default function Checkout() {
     setError('');
     setEnviando(true);
     try {
-      const { init_point, codigo } = await api('/orders', {
-        method: 'POST',
+      // Obtener sesión actual (puede ser null si es invitado)
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const { data, error: fnError } = await supabase.functions.invoke('crear-orden', {
         body: {
           items: items.map(i => ({ product_id: i.id, cantidad: i.cantidad })),
-          cliente: form
-        }
+          cliente: form,
+        },
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {},
       });
+
+      if (fnError) throw new Error(fnError.message);
+      if (!data?.init_point) throw new Error('No se pudo generar el pago');
+
       // Guardamos el pedido para la vuelta del checkout
-      sessionStorage.setItem('tavo_ultimo_pedido', JSON.stringify({ codigo, email: form.email }));
+      sessionStorage.setItem('tavo_ultimo_pedido', JSON.stringify({ codigo: data.codigo, email: form.email }));
       // Redirigir a Mercado Pago (Checkout Pro)
-      window.location.href = init_point;
+      window.location.href = data.init_point;
     } catch (err) {
       setError(err.message);
       setEnviando(false);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, fmt, emojiDe } from '../api';
+import { fmt, emojiDe } from '../api';
+import { supabase } from '../lib/supabase';
 import { useCart } from '../context/CartContext';
 
 export default function Catalogo() {
@@ -12,8 +13,19 @@ export default function Catalogo() {
   const [agregado, setAgregado] = useState(null);
 
   useEffect(() => {
-    api('/products').then(setProductos).catch(e => setError(e.message));
-    api('/products/categorias').then(setCategorias).catch(() => {});
+    supabase
+      .from('products')
+      .select('*')
+      .eq('activo', 1)
+      .order('categoria')
+      .order('nombre')
+      .then(({ data, error: e }) => {
+        if (e) { setError(e.message); return; }
+        const prods = (data ?? []).map(p => ({ ...p, disponible: Number(p.stock) > 0 }));
+        setProductos(prods);
+        const cats = [...new Set(prods.map(p => p.categoria).filter(Boolean))];
+        setCategorias(cats);
+      });
   }, []);
 
   const visibles = useMemo(() =>
