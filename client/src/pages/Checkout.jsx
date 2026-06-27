@@ -47,17 +47,11 @@ export default function Checkout() {
     setError('');
     setEnviando(true);
     try {
-      // Obtener sesión actual (puede ser null si es invitado)
-      const { data: { session } } = await supabase.auth.getSession();
-
       const { data, error: fnError } = await supabase.functions.invoke('crear-orden', {
         body: {
           items: items.map(i => ({ product_id: i.id, cantidad: i.cantidad })),
           cliente: form,
         },
-        headers: session?.access_token
-          ? { Authorization: `Bearer ${session.access_token}` }
-          : {},
       });
 
       if (fnError) throw new Error(fnError.message);

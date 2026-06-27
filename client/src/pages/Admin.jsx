@@ -7,11 +7,7 @@ const PROD_VACIO = { nombre: '', descripcion: '', categoria: '', precio: '', uni
 
 // Helper: llama a la Edge Function admin con el JWT del admin
 async function adminFn(body) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const { data, error } = await supabase.functions.invoke('admin', {
-    body,
-    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
-  });
+  const { data, error } = await supabase.functions.invoke('admin', { body });
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
   return data;
