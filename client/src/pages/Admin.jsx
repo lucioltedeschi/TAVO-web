@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { fmt, ESTADOS_LABEL, callEdge } from '../api';
+import ListaPrecios from './ListaPrecios';
 
 const ESTADOS = ['pendiente_pago', 'pagado', 'en_preparacion', 'en_camino', 'entregado', 'cancelado'];
 const PROD_VACIO = { nombre: '', descripcion: '', categoria: '', precio: '', unidad: 'caja', stock: '', imagen: '' };
@@ -17,13 +18,14 @@ export default function Admin() {
     <div className="container">
       <h1>Panel de administración</h1>
       <div className="tabs">
-        {[['dashboard', 'Dashboard'], ['pedidos', 'Pedidos'], ['productos', 'Productos y stock']].map(([k, label]) => (
+        {[['dashboard', 'Dashboard'], ['pedidos', 'Pedidos'], ['productos', 'Productos y stock'], ['lista', 'Lista de precios']].map(([k, label]) => (
           <button key={k} className={`tab ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
       {tab === 'dashboard' && <Dashboard />}
       {tab === 'pedidos' && <Pedidos />}
       {tab === 'productos' && <Productos />}
+      {tab === 'lista' && <ListaPrecios />}
     </div>
   );
 }
